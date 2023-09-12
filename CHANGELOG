@@ -1,0 +1,9 @@
+1.000	First released version
+1.001	Fixed Birthday problem calculation Qm2()
+	Print % over or under of faults per interrupt
+	Fixed app MTBF calculation, which affects tau_opt and daly
+	Call MTBF of the application MTBI
+1.002	Fix a bug where I did not add the rework time to work done, if we made it to the next checkpoint.
+	Small output format change for the number of interrupts so it doesn't look like it is a total of the numbers above
+	If enabled, be more verbose when reading an input file
+	Some small code clean-up and added a few more comments

@@ -1,0 +1,480 @@
+VERSION
+    1.005
+
+INTRODUCTION
+    The program in this directory, copyrighted and licensed under
+    the name app_model, mimics a parallel application's cycles
+    of performing work, saving occasional checkpoints, getting
+    interrupted, restarting, redoing lost work, and continuing this
+    sequence until it has completed the number of work hours specified
+    at the beginning.  It has many command line options that control
+    the timing of this cycle, when and how often the application
+    gets interrupted, and the configuration of the system it runs on.
+
+    The program was designed to study checkpoint/restart behavior
+    and its impact on total execution time in light of redundant
+    computing.  The program can mimic running an application on
+    N nodes. A failure of any one of those N nodes leads to an
+    application interrupt and a restart. It is possible to specify
+    that some or all of the N nodes have a redundant partner node. If
+    a node in such a pair faults, the application is not interrupted
+    and continues to do work.  Only when both nodes in a pair fault,
+    will the application take an interrupt and has to restart.
+
+    Using this program we found that for large-scale systems and
+    the right conditions, it is sometimes worthwhile to use twice
+    as many nodes to get a certain amount of work done in much
+    less than half the time. The Sandia Technical report 2009-6753
+    documents some of our early findings and describes this program.
+
+    The program currently only mimics coordinated checkpoint/restart
+    and has some other limitations, such as no more than one
+    redundant node for each active node.  We are working on
+    several extensions and improvements. please contact us if you
+    are interested.
+
+    For comments and questions, please contact the author: Kurt
+    Fereirra <kbferre@sandia.gov>
+
+
+
+COMPILING
+    The included Makefile should build the code on most Unix
+    systems. It has been tested on several Linux versions. The
+    code requires the GNU Scientific Library (gsl).  Which is
+    not always installed by default. You can obtain it from
+    http://www.gnu.org/software/gsl, if necessary.
+
+    The Makefile creates an executable name two_step (as in two
+    steps forward, one step back, mimicking an application's march
+    towards completion ;-)
+
+
+
+USAGE
+    The program understand the options below. None of them are
+    mandatory. Long options; e.g., --soft_reboot, can be truncated
+    as long as they are still distinct from all other options;
+    e.g., --soft.
+
+    -w, --work_time HOURS
+	The application will complete work for that many hours
+	on each node (weak scaling).  Default is 168 hours (one
+	week). The elapsed time of the application will be higher due
+	to checkpoint/restart overhead and application interrupts.
+
+    -n, --num_bundles NUM
+	Number of nodes the application runs on. Default is 512
+	nodes. These are the nodes an application "sees", and does
+	not include any redundant nodes that would not be visible
+	to the application.
+
+    -r, --redundant NUM
+	Number of redundant nodes: 0...N, where N is the number of
+	bundles (-n) selected.	0 means no redundant computing at
+	all, and N means each node in the system has a redundant
+	partner. Values in between are acceptable if an application
+	is run in partial redundant mode. Default is no redundant
+	nodes (0).
+
+    -v, --verbose
+	This option may be repeated for increased verbosity. Mostly
+	useful for debugging and to observe the inner workings of
+	the program.
+
+    --distribution DIST
+	Selects the random distribution function for the fault
+	generator. DIST can be exp (default), gamma, or weibull.
+
+    --scale a
+	Set the scale parameter for the Weibull and gamma
+	distribution. The default s 43800.000 hours.
+
+    --shape b
+	Set the shape parameter for the gamma and weibull
+	distribution.  The default shape parameter b is 0.5 and
+	must be > 0.
+
+    -s, --seed
+	Use a fixed seed for the random number generator. This
+	is useful to repeat experiments with the same start
+	conditions. Without this option, a random seed based on the
+	current time and PID of the process is used, which results
+	in different results for each run.
+
+    -c, --checkpoint_time MINUTES
+	Amount of time needed to checkpoint an application. Default
+	is 5 minutes.  This is currently fixed, although it should
+	vary with application size and the I/O characteristics of
+	the system.
+
+    -R, --restart_time MINUTES
+	Time to restart and application. Default is 10 minutes. The
+	program currently assumes that the application is restarted
+	right away after an interrupt and spends this many minutes
+	reading in the last successful checkpoint. Wait time in
+	a batch queue is not considered here. After this restart
+	time, any work lost since the previous checkpoint is redone
+	before the regular work phase can be entered again.  This is
+	currently fixed, although it should vary with application
+	size and the I/O characteristics of the system.
+
+    -t, --tau MINUTES
+	Checkpoint interval; i.e., the elapsed time before the
+	next checkpoint is written. Unless specified, this time is
+	computed using Daly's equation for the optimum checkpoint
+	interval.
+
+    -m, --mtbf_node HOURS
+	The Mean Time Between Failures (MTBF) of a single
+	node. Default is 5 years (43800 hours).  It is assumed
+	that the MTBF and failure characteristics is the same for
+	all nodes.
+
+    --mtbf_sys HOURS
+	The system MTBF is calculated by default and used for
+	comparison at the end of the simulation. This is the MTBF of
+	the system; i.e., the time between faults. The application
+	may have a larger MTBF, if redundant nodes are used.
+
+    -a, --mtbf_app HOURS
+	By default the application MTBF is calculated based on the
+	node MTBF. It is used to calculate the optimal checkpoint
+	interval. This is the time between interrupts the application
+	experiences, which may be different from the system MTBF,
+	if redundant nodes are used.  If provided, it will override
+	node MTBF for that calculation. The node MTBF will still
+	be used for the random fault generator.
+
+    -d, --delay_ras MINUTES
+	Multiple faults within this time count as one. Sometimes
+	multiple components fail at nearly the same time, or
+	cause other failures.  This option allows the cumulation
+	of all faults within this time interval into a single
+	event. Individual faults are still reported at the
+	end, but the application does not go through a full
+	restart/rework/interrupt cycle for each one of them.
+
+    --finterrupts FILENAME
+	For each application interrupt write the interrupt time
+	(in hours since application start) and the number of faults
+	since the last interrupt. If no redundant nodes are present,
+	each fault leads to an interrupt. Specifying "-" directs
+	output to stdout.
+
+    --ffaults FILENAME
+	For each node fault write the fault time (in hours since
+	application start) to the specified file.  Specifying "-"
+	directs output to stdout.
+
+    --soft_reboot <success>,<reboot time>
+	By default failed nodes are not reused. With this option
+	it is possible to reboot nodes after each fault. The
+	probability that they reboot successfully and can be
+	reintegrated into the computation can be specified in the
+	range 0%...100%.  It takes a certain number of minutes
+	for a node to reboot. Both values must be specified. E.g.,
+	--soft_reboot 50,10 specifies that on average half of the
+	nodes can be reintegrated (50%), and it takes 10 minutes
+	for each node to boot. If the other node receives a fault
+	during those 10 minutes, the bundle, and the application will
+	fail. After the 10 minutes and a successful re-integration,
+	redundancy is restored.
+
+    --help
+	Short information about the command line options.
+
+    --input FILENAME
+	Instead of letting a random number generator create node
+	faults, application interrupts can be read from an input
+	file. The file should have three values per line: The time,
+	in seconds from application start, when the interrupt occurs;
+	the node that causes the interrupt; and a string describing
+	the error. The fields are separated by white space.
+
+	The node number is checked but not further used. The fault
+	description string must be present, but is ignored. This
+	format was chosen to make it easy to process fault logs
+	that can be found on the Internet. They may need to be
+	pre-processed, but can be easily converted into the format
+	required here.
+
+    -p, --performance
+	Display performance data about the simulation itself.
+
+
+
+OUTPUT
+    A typical run and its output are shown here. The line by line
+    explanation is below.
+
+    00	./two_step -n 100000 -r 100000 -w 720 -p
+    01		Version 1.005
+    02		Command line "./two_step -n 100000 -r 100000 -w 720 -p"
+    03		PARAMETERS
+    04		  Active nodes                 100000
+    05		  Redundant nodes              100000
+    06		  Total nodes                  200000
+    07		  Checkpoint duration            5.00 minutes
+    08		  Restart duration              10.00 minutes
+    09		  Work to be done              720.00 hours
+    10		  Node MTBF                  43800.00 hours
+    11		  File for interrupt times            ""
+    12		  File for fault times                ""
+    13		  Seed for pseudo random generator    random
+    14		  Fault distribution:                 exponential
+    15		  RAS delay                      0.00 minutes
+    16		  Soft reboot time                    not used
+    17		
+    18		CALCULATED
+    19		  System MTBF                    0.22 hours (13.140 minutes)
+    20		  Application MTBI             122.90 hours (7373.718 minutes)
+    21		  Checkpoint interval            4.47 hours (268.223 minutes)
+    22		  Faults/interrupt             561.17
+    23		WARNING: checkpoint + restart time > system MTBF! This may take quite a while.
+    24		
+    25		SIMULATION
+    26		  Application completed        720.00 hours of work (100.00% of work to be done)
+    27		  Elapsed time                 740.25 hours (Overhead is  2.81%)
+    28		  Total restart time             0.67 hours      (  0.09%)
+    29		  Total rework time              6.17 hours      (  0.83%)
+    30		  Total work time              720.00 hours      ( 97.26%)
+    31		  Total checkpoint time         13.42 hours      (  1.81%)
+    32		  Total RAS delay                0.00 hours      (  0.00%)
+    33		    -----------------------------------------------------
+    34		    Totals                     740.25 hours      (100.00%)
+    35		
+    36		  Number of restarts:            4    Failed:          0
+    37		  Number of rework:              4    Failed:          0
+    38		  Number of work segments:     162    Failed:          4
+    39		  Number of checkpoints:       161    Failed:          0
+    40		    ----------------------------------------------------
+    41		                                      Fails:           4
+    42		                                      Interrupts:      4
+    43		
+    44		  Faults:                     3364
+    45		  Failed nodes:               3364    Repaired:     3088 (276 nodes to be repaired after app completion)
+    46		  Successful soft reboots:       0    Failed:          0 (0.00%)
+    47		  Avg faults per int:      841.000,   49.87% over calculated 561.17
+    48		  System MTBF                    0.22 hours (13.203 minutes), 0.48% over calculated 0.22 hours
+    49		  App. MTBI                    185.06 hours (11103.783 minutes), 50.59% over calculated 122.90 hours
+    50		  Modeled elapsed time         748.19 hours (44891.581 minutes), 1.07%, over simulated 740.25 hours
+    51		
+    52		PROGRAM PERFORMANCE INFORMATION:
+    53		  Generated 203092 random numbers and 0 random probabilities
+    54		  Calls to rMPI() 5
+    55		  Read 0 faults from input file, accepted 0 (0.00%)
+    56		  Time to model this application:  0h:00m:0.015353
+
+
+    Line by line description.
+    -------------------------
+    Line 00  The executable is called two_step. No command line
+	     options are mandatory.
+
+    Line 01  Version of the executable.
+
+    Line 02  Capture the command line given.
+
+    Line 03  Starting here is a list of parameters. These are either
+	     defaults or were specified on the command line.
+
+    Line 04  The number of bundles being simulated.
+
+    Line 05  The total number of redundant nodes, in addition to
+	     the active nodes in each bundle.
+
+    Line 06  The total number of nodes: active nodes + redundant
+	     nodes.
+
+    Line 07  The time necessary to write a checkpoint.
+
+    Line 08  The time necessary to restart an application.
+
+    Line 09  The amount of work to be done (on each node).
+
+    Line 10  The node MTBF.
+
+    Line 11  File name to write interrupt times and number of
+             faults. "" means no output will be generated.
+
+    Line 12  File name to write fault times. "" means no output
+             will be generated.
+
+    Line 13  Seed used for pseudo random generator. Either "random"
+             or "fixed".
+
+    Line 14  Random number distribution. Exponential, Gamma,
+	     or Weibull.
+
+    Line 15  Time interval within which all faults are considered
+             to be simultaneous. If > 0 avoids an application restart
+             for each interrupt, if they are only a few seconds apart.
+
+    Line 16  Time to reboot a node after a fault and probability
+	     of a successful re-integration.
+
+    Line 18  Calculated values from the parameters known so far.
+
+    Line 19  Estimated system MTBF; i.e., time between node faults.
+
+    Line 20  Estimated application MTBF; i.e., time between
+             application interrupts.
+
+    Line 21  Calculated (optimal) checkpoint interval, based on
+	     Daly's equation.
+
+    Line 22  Estimated faults per application interrupt.
+
+    Line 23  A (false in this case) warning that the simulation may require
+	     longer than usual.
+
+    Line 25  Following are the observed values after the simulation
+             has completed.
+
+    Line 26  The amount of work completed. Should always be 100%.
+
+    Line 27  The elapsed time, which includes work, checkpoints,
+             restarts, and redoing of lost work.
+
+    Line 28  Time and percentage spent in restart phase.
+
+    Line 29  Time and percentage spent in rework (lost work) phase.
+
+    Line 30  Time and percentage spent in work phase. Should be
+             number of work hours specified on command line
+             (or default).
+
+    Line 31  Time and percentage spent check-pointing.
+
+    Line 32  Time and percentage spent waiting for fault bursts to
+             pass (-d option). (Not well tested.)
+
+    Line 34  Total should be equal to elapsed time and 100%.
+
+    Line 36  Number of restarts and how many of those failed.
+
+    Line 37  Number of rework phases and how many of those failed.
+
+    Line 38  Number of work phases and how many of those failed.
+
+    Line 39  Number of checkpoints and how many of those failed.
+
+    Line 41  The total of failed phases listed above. This and
+	     the next line below should always match.
+
+    Line 42  Number of interrupts the application experienced.
+
+    Line 44  Total number of node faults the system experienced.
+
+    Line 45  How many nodes failed during the entire
+	     simulation. Should match the number of faults seen
+	     above. The number of repaired nodes is the same, if
+	     no redundant nodes are present. It might be less with
+	     redundant nodes, since the application was running
+	     with some broken nodes that can be repaired after the
+	     run completes.
+
+    Line 46  Statistics about rebooting nodes and re-integration.
+
+    Line 47  Observed and calculated number of faults per interrupt.
+             For non-redundant runs, this should always be 1.
+	     The large mismatch between calculated and simulation is
+	     due to the small number of total interrupts: only four
+	     in this example.
+
+    Line 48  Observed system MTBF and comparison to estimate above.
+
+    Line 49  Observed application MTBF and comparison to estimate
+             above. Again, off by quite a bit due to the low number
+	     of interrupts.
+
+    Line 50  Calculated elapsed time using Daly's model and
+             comparison to simulation run.
+
+    Line 52  Some performance data about the simulation
+             itself. Triggered by the -p option.
+
+    Line 53  Number random numbers generated (for faults) and number
+             of random probabilities generated (for soft reboot
+             success).
+
+    Line 54  Number of calls to the rMPI() function.
+
+    Line 55  How many faults (application interrupts) were read
+             from the input file.
+
+    Line 56  Wall-clock time of this simulation run.
+
+
+
+DESIGN
+    Some of the design of this program is described in the Sandia
+    Technical report 2009-6753.  Here we briefly cover what each
+    source file contains.
+
+    main.c
+	Start of program, command line option processing, calculation
+	of optimal checkpoint interval, and output of the initial
+	parameters (banner). Also opens input and output files,
+	if necessary.
+
+    app.c, app.h
+	Basically a state machine that cycles between work,
+	checkpoint, restart, and rework until all the work has been
+	done. It calls rMPI to determine when the next application
+	interrupt will occur.
+
+    rMPI_model.c, rMPI_model.h
+	Figure out which node dies next and when, and whether it
+	kills the application.
+
+    phases.c, phases.h
+	Handle each phase of the state machine in app.c. Calculate
+	how long each phase takes, whether a checkpoint needs
+	to be written, and whether the phase is cut short by an
+	application interrupt.
+
+    report.c, report.h
+	Print out the final report after the simulation. Includes
+	calculations to compare against estimates before the
+	simulation.
+
+    data_structs.c, data_structs.h
+	Data structure to manage nodes and their state.
+
+    globals.c, globals.h
+	Global variables that are shared among several files and
+	functions.
+
+    input.c, input.h
+	Functions to read interrupt times from an input file.
+
+    rnd.c, rnd.h
+	Compute next node failure time and other random number
+	related functions.
+
+    timing.c, timing.h
+	Calculate running time of the simulation.
+
+
+
+LICENSE
+    app_model, version 1.0 - a program that mimics a parallel
+    application's checkpoint/restart behavior on a system with
+    redundant compute nodes.
+
+    Copyright 2009 - 2011 Sandia Corporation. Under the terms
+    of Contract DE-AC04-94AL85000 with Sandia Corporation, the
+    U.S. Government retains certain rights in this software.
+
+    This program has been released into the public domain using
+    the GNU General Public License Version 3: you can redistribute
+    it and/or modify it under the terms of the GNU General Public
+    License as published by the Free Software Foundation, either
+    version 3 of the License, or (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    file LICENSE in this directory for a copy of the GPL 3.
